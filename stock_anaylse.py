@@ -1,9 +1,79 @@
 import akshare as ak
 import pandas as pd
+import time
+from functools import wraps
+
+# 带重试机制的API调用装饰器
+def retry_with_delay(max_retries=3, delay=2, timeout=30):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            for attempt in range(max_retries):
+                try:
+                    # 每次调用前等待指定时间
+                    if attempt > 0:
+                        print(f"  等待 {delay} 秒后重试...")
+                        time.sleep(delay)
+                    else:
+                        time.sleep(delay)
+                    
+                    result = func(*args, **kwargs)
+                    return result
+                except Exception as e:
+                    print(f"  第 {attempt + 1}/{max_retries} 次调用失败: {e}")
+                    if attempt == max_retries - 1:
+                        print(f"  已达到最大重试次数，放弃调用")
+                        raise
+            return None
+        return wrapper
+    return decorator
+
+# 获取行业信息的函数，带2秒间隔和重试机制
+@retry_with_delay(max_retries=3, delay=2, timeout=30)
+def get_industry_info(code):
+    """获取股票行业信息，带2秒间隔和超时重试"""
+    industry_data = ak.stock_individual_info_em(symbol=str(code))
+    industry = None
+    if isinstance(industry_data, pd.DataFrame) and not industry_data.empty:
+        industry_row = industry_data[industry_data['item'] == '行业']
+        if not industry_row.empty:
+            industry = industry_row.iloc[0]['value']
+    return industry
 
 # 步骤1：获取所有A股股票代码和名称
-def get_all_a_stocks(): '数据日期' in stock_data.columns:
-                    # 尝试转换日期格式并排序
+def get_all_a_stocks():
+    print("正在获取A股列表...")
+    # 使用 stock_info_sh_name_code 接口获取沪股列表
+    print("使用 stock_info_sh_name_code 接口...")
+    stock_list = ak.stock_info_sh_name_code()
+    # 提取证券代码和证券简称
+    stock_list = stock_list[['证券代码', '证券简称']].rename(columns={'证券代码': 'code', '证券简称': 'name'})
+    print(f"获取到 {len(stock_list)} 只沪股股票")
+    return stock_list
+
+# 步骤2：查询个股实时信息并筛选
+def filter_by_valuation(stock_list):
+    print("\n正在根据估值指标筛选股票...")
+    filtered_stocks = []
+    
+    # 处理所有股票
+    total_stocks = len(stock_list)
+    print(f"正在处理所有 {total_stocks} 只股票...")
+    for index, row in stock_list.iterrows():
+        code = row['code']
+        name = row['name']
+        print(f"处理第 {index+1}/{total_stocks} 只股票: {code} {name}")
+        
+        try:
+            # 获取个股实时信息
+            print(f"  获取 {code} {name} 的实时信息...")
+            stock_data = ak.stock_value_em(symbol=code)
+            
+            # 提取估值指标
+            print(f"  提取 {code} {name} 的估值指标...")
+            if isinstance(stock_data, pd.DataFrame) and not stock_data.empty:
+                # 按日期排序，获取最新的一行数据
+                if '数据日期' in stock_data.columns:
                     try:
                         stock_data['数据日期'] = pd.to_datetime(stock_data['数据日期'])
                         stock_data = stock_data.sort_values('数据日期', ascending=False)
@@ -47,7 +117,7 @@ def get_all_a_stocks(): '数据日期' in stock_data.columns:
     
     # 保存为Excel文件
     if not result_df.empty:
-        output_path = "C:\\Users\\ZJH\\Documents\\浙江广电-前端开发项目\\QuantitativeResearch\\fliter-1.xlsx"
+        output_path = "C:/Users/ZJH/Documents/浙江广电-前端开发项目/QuantitativeResearch/fliter-1.xlsx"
         result_df[['code', 'name']].to_excel(output_path, index=False)
         print(f"已将筛选结果保存到: {output_path}")
     
@@ -59,7 +129,7 @@ def filter_by_fundamentals():
     final_stocks = []
     
     # 从fliter-1.xlsx读取筛选后的股票
-    input_file = "C:\\Users\\ZJH\\Documents\\浙江广电-前端开发项目\\QuantitativeResearch\\fliter-1.xlsx"
+    input_file = "C:/Users/ZJH/Documents/浙江广电-前端开发项目/QuantitativeResearch/fliter-1.xlsx"
     try:
         filtered_stocks = pd.read_excel(input_file)
         print(f"已从 {input_file} 读取 {len(filtered_stocks)} 只股票")
@@ -81,7 +151,6 @@ def filter_by_fundamentals():
             if isinstance(fundamental_data, pd.DataFrame) and not fundamental_data.empty:
                 # 按报告期排序，获取最新的一行数据
                 if 'REPORT_DATE' in fundamental_data.columns:
-                    # 尝试转换日期格式并排序
                     try:
                         fundamental_data['REPORT_DATE'] = pd.to_datetime(fundamental_data['REPORT_DATE'])
                         fundamental_data = fundamental_data.sort_values('REPORT_DATE', ascending=False)
@@ -171,7 +240,7 @@ def filter_by_fundamentals():
     
     # 保存为Excel文件
     if not result_df.empty:
-        output_file = "C:\\Users\\ZJH\\Documents\\浙江广电-前端开发项目\\QuantitativeResearch\\fliter-2.xlsx"
+        output_file = "C:/Users/ZJH/Documents/浙江广电-前端开发项目/QuantitativeResearch/fliter-2.xlsx"
         result_df.to_excel(output_file, index=False)
         print(f"已将筛选结果保存到: {output_file}")
     
@@ -183,7 +252,7 @@ def filter_by_valuation_ranking():
     final_stocks = []
     
     # 从fliter-2.xlsx读取筛选后的股票
-    input_file = "C:\\Users\\ZJH\\Documents\\浙江广电-前端开发项目\\QuantitativeResearch\\fliter-2.xlsx"
+    input_file = "C:/Users/ZJH/Documents/浙江广电-前端开发项目/QuantitativeResearch/fliter-2.xlsx"
     try:
         filtered_stocks = pd.read_excel(input_file)
         print(f"已从 {input_file} 读取 {len(filtered_stocks)} 只股票")
@@ -224,15 +293,12 @@ def filter_by_valuation_ranking():
                                 # 获取行业信息
                                 print(f"  获取 {code} {name} 的行业信息...")
                                 try:
-                                    # 将code转换为字符串类型
-                                    industry_data = ak.stock_individual_info_em(symbol=str(code))
-                                    industry = None
-                                    if isinstance(industry_data, pd.DataFrame) and not industry_data.empty:
-                                        # 查找行业信息
-                                        industry_row = industry_data[industry_data['item'] == '行业']
-                                        if not industry_row.empty:
-                                            industry = industry_row.iloc[0]['value']
-                                            print(f"  行业信息: {industry}")
+                                    # 使用带重试机制的函数获取行业信息
+                                    industry = get_industry_info(code)
+                                    if industry:
+                                        print(f"  行业信息: {industry}")
+                                    else:
+                                        print(f"  未获取到行业信息")
                                 except Exception as e:
                                     print(f"  获取行业信息失败: {e}")
                                     industry = None
@@ -245,19 +311,14 @@ def filter_by_valuation_ranking():
                         print(f"  解析排名: {ranking}")
                         if ranking <= 8:
                             # 获取行业信息
-                            print(f"  获取 {code} 将code转换为字符串类型)
+                            print(f"  获取 {code} {name} 的行业信息...")
                             try:
-         _data   ak.s ock    ivid al     _em symbol=str(  # 将)code转换为字符串类型
-                         ndustry = None
-                                    i   si stance(in   ind_data, pd.DataFrame) and not industry_data.emptyustry_data = ak.stock_individual_info_em(sy# 查找行业信息
-                                        industry_row = industby_data[oldustry_data['i=em'](==c'od']
-                                        if not      ry_ ow.empt :                               industry = Noneindustry=
-indu try_row.iloc[0]['valu ']                               if isinstance(industry_dapd.D: {industry}ataFrame) and not industry_data.empty:
-                                    # 查找行业信息
-                                    industry_row = industry_data[industry_data['item'] == '行业']
-                                    if not industry_row.empty:
-                                        industry = industry_row.iloc[0]['value']
-                                        print(f"  行业信息: {industry}")
+                                # 使用带重试机制的函数获取行业信息
+                                industry = get_industry_info(code)
+                                if industry:
+                                    print(f"  行业信息: {industry}")
+                                else:
+                                    print(f"  未获取到行业信息")
                             except Exception as e:
                                 print(f"  获取行业信息失败: {e}")
                                 industry = None
@@ -266,26 +327,24 @@ indu try_row.iloc[0]['valu ']                               if isinstance(indust
                             print(f"{code} {name} 排名 {ranking}，行业 {industry}，符合条件")
             else:
                 print(f"  数据结构不符合预期，跳过")
-               将code转换为字符串类型   except Exception as e:
-            pri_datant(ak.s处ock理股票 ivid{al} {na_emmsymbol=str(e} 时出)错: {e}")
+                continue
+        except Exception as e:
+            print(f"处理股票 {code} {name} 时出错: {e}")
             continue
-   ndustry = None
-                                i 
-si stance(in   pri_data, pd.DataFrame) and not industry_data.emptynt(f"\n估值比较排名筛选完成，符合条件的股票有 {len(final_s# 查找行业信息
-                                    industry_row = industoy_data[ckdustry_data['isem']只=="')']
-                                    if not 
-    ry_#ow.empt :果D          ataFrame
-    result_df = pd.Dindustrya=tindurtry_row.iloc[0]['valua']e(    final_stocks)
+    
+    print(f"\n估值比较排名筛选完成，符合条件的股票有 {len(final_stocks)} 只")
+    
+    # 创建结果DataFrame
+    result_df = pd.DataFrame(final_stocks)
     
     # 保存为Excel文件
-    if resu: {industry}lt_df.empty:
-        output_file = "C:\\Users\\ZJH\\Documents\\浙江广电-前端开发项目\\QuantitativeResearch\\fliter-3.xlsx"
+    if not result_df.empty:
+        output_file = "C:/Users/ZJH/Documents/浙江广电-前端开发项目/QuantitativeResearch/fliter-3.xlsx"
         result_df[['code', 'name', 'ranking', 'industry']].to_excel(output_file, index=False)
         print(f"已将筛选结果保存到: {output_file}")
     
     return result_df
 
-    
 # 主函数
 def main():
     print("开始股票筛选...")
