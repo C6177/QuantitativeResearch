@@ -236,7 +236,7 @@ if __name__ == "__main__":
         result_df = pd.DataFrame(selected_stocks)
         
         # 保存为Excel文件
-        output_path = "C:/Users/ZJH/Documents/浙江广电-前端开发项目/QuantitativeResearch/evaluate.xlsx"
+        output_path = "/Users/danawang/coding/QuantitativeResearch/evaluate.xlsx"
         result_df.to_excel(output_path, index=False)
         print(f"已将筛选结果保存到: {output_path}")
         
