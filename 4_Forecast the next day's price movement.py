@@ -36,11 +36,11 @@ def create_features(df):
     df = df.copy()
     
     # 价格数据
-    open = df['open'].values
-    close = df['close'].values
-    high = df['high'].values
-    low = df['low'].values
-    volume = df['volume'].values
+    open = df['open'].values.astype(float)
+    close = df['close'].values.astype(float)
+    high = df['high'].values.astype(float)
+    low = df['low'].values.astype(float)
+    volume = df['volume'].values.astype(float)
     
     # --- 移动平均线 ---
     df['MA5'] = talib.SMA(close, timeperiod=5)
@@ -174,24 +174,85 @@ def predict_next_day(model, feature_cols, df):
 # ==============================================
 if __name__ == "__main__":
     # 参数设置
-    stock_code = "000001"  # 平安银行
-    start_date = "20220101"
-    end_date = "20241231"
+    start_date = "20251201"
+    end_date = "20260310"
     
-    # 1. 获取数据
-    print("获取数据中...")
-    raw_data = fetch_stock_data(stock_code, start_date, end_date)
+    print("开始执行预测程序...")
     
-    # 2. 特征工程
-    print("构建特征...")
-    feature_data = create_features(raw_data)
+    # 读取股票列表
+    input_file = "C:/Users/ZJH/Documents/浙江广电-前端开发项目/QuantitativeResearch/evaluate-fliter-1.xlsx"
+    print(f"读取股票列表: {input_file}")
     
-    # 3. 训练模型
-    print("\n训练模型...")
-    model, features = train_prediction_model(feature_data)
+    try:
+        stock_list = pd.read_excel(input_file)
+        print(f"成功读取 {len(stock_list)} 只股票")
+        print(f"文件列名: {stock_list.columns.tolist()}")
+        print(f"前5行数据:")
+        print(stock_list.head())
+    except Exception as e:
+        print(f"读取文件失败: {e}")
+        import traceback
+        traceback.print_exc()
+        exit()
     
-    # 4. 预测下一个交易日
-    print("\n" + "="*50)
-    print(f"【预测结果】股票代码: {stock_code}")
-    predict_next_day(model, features, feature_data)
-    print("="*50)
+    # 存储预测结果
+    prediction_results = []
+    
+    # 逐个分析股票
+    total_stocks = len(stock_list)
+    for index, row in stock_list.iterrows():
+        code = row['code']
+        # 将股票代码转换为字符串类型
+        code = str(code)
+        # 确保股票代码是6位数字
+        code = code.zfill(6)
+        name = row.get('name', '')
+        
+        print(f"\n分析第 {index+1}/{total_stocks} 只股票: {code} {name}")
+        
+        try:
+            # 1. 获取数据
+            print("获取数据中...")
+            raw_data = fetch_stock_data(code, start_date, end_date)
+            
+            # 2. 特征工程
+            print("构建特征...")
+            feature_data = create_features(raw_data)
+            
+            # 3. 训练模型
+            print("训练模型...")
+            model, features = train_prediction_model(feature_data)
+            
+            # 4. 预测下一个交易日
+            print("预测次日涨跌...")
+            pred, prob = predict_next_day(model, features, feature_data)
+            
+            # 保存结果
+            prediction_results.append({
+                'code': code,
+                'name': name,
+                '上涨概率': prob,
+                '预测结果': '上涨' if pred == 1 else '下跌'
+            })
+            
+        except Exception as e:
+            print(f"分析股票 {code} 时出错: {e}")
+            continue
+    
+    # 输出结果到Excel
+    if prediction_results:
+        print(f"\n预测完成，共分析 {len(prediction_results)} 只股票")
+        
+        # 创建结果DataFrame
+        result_df = pd.DataFrame(prediction_results)
+        
+        # 保存为Excel文件
+        output_path = "C:/Users/ZJH/Documents/浙江广电-前端开发项目/QuantitativeResearch/prediction.xlsx"
+        result_df.to_excel(output_path, index=False)
+        print(f"已将预测结果保存到: {output_path}")
+        
+        # 打印前几行结果
+        print("\n预测结果预览:")
+        print(result_df.head())
+    else:
+        print("\n没有成功预测的股票")

@@ -5,7 +5,7 @@ import numpy as np
 # 步骤1：读取evaluate.xlsx文件，获取股票code
 def read_evaluate_file():
     print("正在读取evaluate.xlsx文件...")
-    input_file = "/Users/danawang/coding/QuantitativeResearch/evaluate.xlsx"
+    input_file = "C:/Users/ZJH/Documents/浙江广电-前端开发项目/QuantitativeResearch/evaluate.xlsx"
     try:
         df = pd.read_excel(input_file)
         print(f"已从 {input_file} 读取 {len(df)} 条记录")
@@ -83,7 +83,7 @@ def filter_by_valuation_ranking():
     
     # 保存为Excel文件
     if not result_df.empty:
-        output_file = "/Users/danawang/coding/QuantitativeResearch/evaluate-fliter-1.xlsx"
+        output_file = "C:/Users/ZJH/Documents/浙江广电-前端开发项目/QuantitativeResearch/evaluate-fliter-1.xlsx"
         result_df.to_excel(output_file, index=False)
         print(f"已将筛选结果保存到: {output_file}")
     
@@ -95,7 +95,7 @@ def filter_by_fundamentals():
     final_stocks = []
     
     # 从evaluate-fliter-1.xlsx读取筛选后的股票
-    input_file = "/Users/danawang/coding/QuantitativeResearch/evaluate-fliter-1.xlsx"
+    input_file = "C:/Users/ZJH/Documents/浙江广电-前端开发项目/QuantitativeResearch/evaluate-fliter-1.xlsx"
     try:
         filtered_stocks = pd.read_excel(input_file)
         print(f"已从 {input_file} 读取 {len(filtered_stocks)} 只股票")
@@ -125,26 +125,48 @@ def filter_by_fundamentals():
                     except Exception as e:
                         print(f"  报告期排序失败: {e}")
                 
-                # 取最新的一行数据
-                latest_data = fundamental_data.iloc[0]
+                # 取最新的前5行数据
+                latest_data = fundamental_data.head(5)
+                print(f"  取最新的前10行数据，报告期范围: {latest_data['REPORT_DATE'].min()} 到 {latest_data['REPORT_DATE'].max()}")
                 
-                # 提取基本面指标
-                eps = latest_data.get('EPSJB', None)  # 基本每股收益(元)
-                eps_nq = latest_data.get('EPSKCJB', None)  # 扣非每股收益(元)
-                net_profit_rate = latest_data.get('XSJLL', None)  # 净利率(%)
-                roa = latest_data.get('ZZCJLL', None)  # 总资产收益率(加权)(%)
-                revenue_growth = latest_data.get('TOTALOPERATEREVETZ', None)  # 营业总收入同比增长(%)
-                net_profit_growth = latest_data.get('PARENTNETPROFITTZ', None)  # 归属净利润同比增长(%)
-                net_profit_nq_growth = latest_data.get('KCFJCXSYJLRTZ', None)  # 扣非净利润同比增长(%)
-                operating_cash_flow_per_share = latest_data.get('MGJYXJJE', None)  # 每股经营现金流(元)
-                operating_cash_flow_revenue_ratio = latest_data.get('JYXJLYYSR', None)  # 经营净现金流/营业收入
-                sales_cash_flow_revenue_ratio = latest_data.get('XSJXLYYSR', None)  # 销售净现金流/营业收入
-                asset_liability_ratio = latest_data.get('ZCFZL', None)  # 资产负债率(%)
-                current_ratio = latest_data.get('LD', None)  # 流动比率
-                quick_ratio = latest_data.get('SD', None)  # 速动比率
-                cash_flow_ratio = latest_data.get('XJLLB', None)  # 现金流量比率
+                # 检查前10行数据是否都满足条件
+                all_rows_satisfy = True
+                for idx, row in latest_data.iterrows():
+                    # 提取基本面指标
+                    eps = row.get('EPSJB', None)  # 基本每股收益(元)
+                    operating_cash_flow_per_share = row.get('MGJYXJJE', None)  # 每股经营现金流(元)
+                    operating_cash_flow_revenue_ratio = row.get('JYXJLYYSR', None)  # 经营净现金流/营业收入
+                    sales_cash_flow_revenue_ratio = row.get('XSJXLYYSR', None)  # 销售净现金流/营业收入
+                    asset_liability_ratio = row.get('ZCFZL', None)  # 资产负债率(%)
+                    current_ratio = row.get('LD', None)  # 流动比率
+                    quick_ratio = row.get('SD', None)  # 速动比率
+                    cash_flow_ratio = row.get('XJLLB', None)  # 现金流量比率
+                    
+                    # 筛选条件
+                    condition1 = eps > 0 if eps else False
+                    condition8 = operating_cash_flow_per_share > 0 if operating_cash_flow_per_share else False
+                    condition9 = operating_cash_flow_revenue_ratio >= 0.1 if operating_cash_flow_revenue_ratio else False
+                    condition10 = sales_cash_flow_revenue_ratio >= 0.9 if sales_cash_flow_revenue_ratio else False
+                    condition11 = asset_liability_ratio < 60 if asset_liability_ratio else False
+                    
+                    # 检查是否满足至少4个条件
+                    conditions = [condition1, condition8, condition9, condition10, condition11]
+                    satisfied_conditions = sum(conditions)
+                    
+                    if satisfied_conditions < 3:
+                        all_rows_satisfy = False
+                        print(f"  第 {idx+1} 行数据不满足条件，仅满足 {satisfied_conditions}/5 项")
+                        break
                 
-                print(f"  最新数据: 基本每股收益={eps}, 扣非每股收益={eps_nq}, 净利率={net_profit_rate}%, 总资产收益率={roa}%, 营收增长={revenue_growth}%, 净利润增长={net_profit_growth}%, 扣非净利润增长={net_profit_nq_growth}%, 每股经营现金流={operating_cash_flow_per_share}, 经营净现金流/营业收入={operating_cash_flow_revenue_ratio}, 销售净现金流/营业收入={sales_cash_flow_revenue_ratio}, 资产负债率={asset_liability_ratio}%, 流动比率={current_ratio}, 速动比率={quick_ratio}, 现金流量比率={cash_flow_ratio}")
+                # 提取最新一行的数据用于打印
+                latest_row = latest_data.iloc[0]
+                eps = latest_row.get('EPSJB', None)  # 基本每股收益(元)
+                operating_cash_flow_per_share = latest_row.get('MGJYXJJE', None)  # 每股经营现金流(元)
+                operating_cash_flow_revenue_ratio = latest_row.get('JYXJLYYSR', None)  # 经营净现金流/营业收入
+                sales_cash_flow_revenue_ratio = latest_row.get('XSJXLYYSR', None)  # 销售净现金流/营业收入
+                asset_liability_ratio = latest_row.get('ZCFZL', None)  # 资产负债率(%)
+                
+                print(f"  最新数据: 基本每股收益={eps}, 每股经营现金流={operating_cash_flow_per_share}, 经营净现金流/营业收入={operating_cash_flow_revenue_ratio}, 销售净现金流/营业收入={sales_cash_flow_revenue_ratio}, 资产负债率={asset_liability_ratio}%")
             else:
                 print(f"  数据结构不符合预期，跳过")
                 continue
@@ -169,33 +191,25 @@ def filter_by_fundamentals():
                 print(f"  数据转换失败，跳过")
                 continue
             
-            # 筛选条件
-            condition1 = eps > 0 if eps else False
-            condition2 = (eps_nq / eps >= 0.8) if eps and eps_nq else False
-            condition3 = net_profit_rate > 5 if net_profit_rate else False
-            condition4 = roa > 5 if roa else False
-            condition5 = revenue_growth > 10 if revenue_growth else False
-            condition6 = net_profit_growth > 10 if net_profit_growth else False
-            condition7 = net_profit_nq_growth > 10 if net_profit_nq_growth else False
-            condition8 = operating_cash_flow_per_share > 0 if operating_cash_flow_per_share else False
-            condition9 = operating_cash_flow_revenue_ratio >= 0.1 if operating_cash_flow_revenue_ratio else False
-            condition10 = sales_cash_flow_revenue_ratio >= 0.9 if sales_cash_flow_revenue_ratio else False
-            condition11 = asset_liability_ratio < 60 if asset_liability_ratio else False
-            condition12 = current_ratio > 1.5 if current_ratio else False
-            condition13 = quick_ratio > 1.0 if quick_ratio else False
-            condition14 = cash_flow_ratio > 0.2 if cash_flow_ratio else False
-            
-            print(f"  条件检查结果: {condition1}, {condition2}, {condition3}, {condition4}, {condition5}, {condition6}, {condition7}, {condition8}, {condition9}, {condition10}, {condition11}, {condition12}, {condition13}, {condition14}")
-            
-            # 检查满足条件的数量
-            conditions = [condition1, condition2, condition3, condition4, condition5, condition6, condition7, 
-                        condition8, condition9, condition10, condition11, condition12, condition13, condition14]
-            satisfied_conditions = sum(conditions)
-            print(f"  满足条件数量: {satisfied_conditions}/14")
-            
-            if satisfied_conditions >= 10:
+            # 检查是否所有前10行数据都满足条件
+            if all_rows_satisfy:
+                # 计算最新一行的满足条件数量
+                condition1 = eps > 0 if eps else False
+                condition8 = operating_cash_flow_per_share > 0 if operating_cash_flow_per_share else False
+                condition9 = operating_cash_flow_revenue_ratio >= 0 if operating_cash_flow_revenue_ratio else False
+                condition10 = sales_cash_flow_revenue_ratio >= 0 if sales_cash_flow_revenue_ratio else False
+                condition11 = asset_liability_ratio < 60 if asset_liability_ratio else False
+                
+                conditions = [condition1, condition8, condition9, condition10, condition11]
+                satisfied_conditions = sum(conditions)
+                
+                print(f"  条件检查结果: {condition1}, {condition8}, {condition9}, {condition10}, {condition11}")
+                print(f"  满足条件数量: {satisfied_conditions}/5")
+                
                 final_stocks.append({'code': code, 'name': name, 'ranking': ranking, 'satisfied_conditions': satisfied_conditions})
-                print(f"{code} {name} 符合条件（满足 {satisfied_conditions}/14 项）")
+                print(f"{code} {name} 符合条件（所有10行数据都满足至少4/5项条件）")
+            else:
+                print(f"  并非所有10行数据都满足条件，跳过")
         except Exception as e:
             print(f"处理股票 {code} {name} 时出错: {e}")
             continue
@@ -207,7 +221,7 @@ def filter_by_fundamentals():
     
     # 保存为Excel文件
     if not result_df.empty:
-        output_file = "/Users/danawang/coding/QuantitativeResearch/evaluate-fliter-2.xlsx"
+        output_file = "C:/Users/ZJH/Documents/浙江广电-前端开发项目/QuantitativeResearch/evaluate-fliter-2.xlsx"
         result_df.to_excel(output_file, index=False)
         print(f"已将筛选结果保存到: {output_file}")
     
@@ -218,8 +232,8 @@ def filter_by_fundamentals():
 def main():
     print("开始执行行业信息获取和筛选流程...")
     
-    # 步骤2：根据估值比较排名筛选
-    filter_by_valuation_ranking()
+    # # 步骤2：根据估值比较排名筛选
+    # filter_by_valuation_ranking()
     
     # 步骤3：根据基本面信息筛选
     filter_by_fundamentals()

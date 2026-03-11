@@ -88,7 +88,7 @@ def calculate_indicators(df):
 # ==============================================
 def trend_scoring_system(df):
     """
-    基于最新交易日的数据，根据多个条件进行打分
+    基于最新交易日的数据，检查是否满足所有7个条件
     """
     if df is None or df.empty:
         return None
@@ -98,79 +98,54 @@ def trend_scoring_system(df):
     # 获取前一日数据，用于计算某些条件的变动
     prev = df.iloc[-2] if len(df) > 1 else latest
 
-    score = 0
+    # 检查所有7个条件
+    conditions = []
     reasons = []
 
-    # --- 趋势类 (满分3分) ---
     # 1. MA5 > MA20 (短期均线在中期之上)
-    if latest['MA5'] > latest['MA20']:
-        score += 1
-        reasons.append("MA5 > MA20")
+    condition1 = latest['MA5'] > latest['MA20']
+    conditions.append(condition1)
+    reasons.append("MA5 > MA20" if condition1 else "MA5 <= MA20")
+
     # 2. MA20 > MA60 (中期均线在长期之上，多头排列)
-    if latest['MA20'] > latest['MA60']:
-        score += 1
-        reasons.append("MA20 > MA60")
+    condition2 = latest['MA20'] > latest['MA60']
+    conditions.append(condition2)
+    reasons.append("MA20 > MA60" if condition2 else "MA20 <= MA60")
+
     # 3. 收盘价 > MA20 (价格站在20日均线上方)
-    if latest['close'] > latest['MA20']:
-        score += 1
-        reasons.append("Close > MA20")
+    condition3 = latest['close'] > latest['MA20']
+    conditions.append(condition3)
+    reasons.append("Close > MA20" if condition3 else "Close <= MA20")
 
-    # --- 动量类 (满分3分) ---
     # 4. MACD柱为正 (DIF > DEA)
-    if latest['DIF'] > latest['DEA']:
-        score += 1
-        reasons.append("MACD柱为正")
+    condition4 = latest['DIF'] > latest['DEA']
+    conditions.append(condition4)
+    reasons.append("MACD柱为正" if condition4 else "MACD柱为负")
+
     # 5. DIF > 0 (快线在零轴之上)
-    if latest['DIF'] > 0:
-        score += 1
-        reasons.append("DIF > 0")
+    condition5 = latest['DIF'] > 0
+    conditions.append(condition5)
+    reasons.append("DIF > 0" if condition5 else "DIF <= 0")
+
     # 6. RSI > 50 (处于强势区域)
-    if latest['RSI'] > 50:
-        # 可选：同时避免严重超买 RSI < 80，可根据需要调整
-        if latest['RSI'] < 80:
-            score += 1
-            reasons.append("RSI在50-80之间")
-        else:
-            # 如果RSI > 80，可能过热，但仍算强势，给0.5分或1分？这里保守给0.5分
-            score += 0.5
-            reasons.append("RSI > 80 (超买区，注意风险)")
-    else:
-        # RSI <= 50，不加分
-        pass
+    condition6 = latest['RSI'] > 50
+    conditions.append(condition6)
+    reasons.append("RSI > 50" if condition6 else "RSI <= 50")
 
-    # --- 能量类 (满分1分) ---
     # 7. 价涨量增：今日成交量 > 20日均量 且 今日收盘价 > 昨日收盘价
-    volume_condition = (latest['volume'] > latest['VOL_MA20']) and (latest['close'] > prev['close'])
-    if volume_condition:
-        score += 1
-        reasons.append("价涨量增")
-    elif latest['volume'] > latest['VOL_MA20']:
-        # 如果仅放量但价格未涨，不加分，但可以记录
-        reasons.append("放量但价未涨")
-    else:
-        reasons.append("量能不足")
+    condition7 = (latest['volume'] > latest['VOL_MA20']) and (latest['close'] > prev['close'])
+    conditions.append(condition7)
+    reasons.append("价涨量增" if condition7 else "非价涨量增")
 
-    # 综合判断
-    max_score = 7  # 理论最高分
-    score_percentage = (score / max_score) * 100
+    # 判断是否满足所有条件
+    all_conditions_met = all(conditions)
 
     result = {
-        'score': round(score, 2),
-        'score_percentage': round(score_percentage, 2),
+        'all_conditions_met': all_conditions_met,
         'reasons': reasons,
         'latest_close': latest['close'],
         'latest_date': df.index[-1].strftime('%Y-%m-%d')
     }
-
-    # 根据得分率判断趋势强度
-    if score_percentage >= 80:
-        result['trend_judgment'] = "强势向上"
-    elif score_percentage >= 60:
-        result['trend_judgment'] = "震荡偏强"
-    elif score_percentage >= 40:
-        result['trend_judgment'] = "震荡或弱势"
-    else:
-        result['trend_judgment'] = "明显弱势"
 
     return result
 
@@ -212,19 +187,18 @@ if __name__ == "__main__":
 
             # 5. 筛选结果
             if analysis_result:
-                trend = analysis_result['trend_judgment']
-                score = analysis_result['score']
-                print(f"趋势判断: {trend}, 得分: {score}")
+                all_conditions_met = analysis_result['all_conditions_met']
+                reasons = analysis_result['reasons']
+                print(f"是否满足所有条件: {'是' if all_conditions_met else '否'}")
+                print(f"条件检查结果: {'; '.join(reasons)}")
                 
-                # 筛选出强势向上和震荡偏强的股票
-                if trend in ["强势向上", "震荡偏强"]:
+                # 筛选出满足所有7个条件的股票
+                if all_conditions_met:
                     selected_stocks.append({
                         'code': code,
-                        'name': name,
-                        'trend_judgment': trend,
-                        'score': score
+                        'name': name
                     })
-                    print(f"✓ 股票 {code} {name} 符合条件，已加入筛选结果")
+                    print(f"✓ 股票 {code} {name} 满足所有7个条件，已加入筛选结果")
         else:
             print(f"✗ 股票 {code} {name} 数据获取失败，跳过")
 
@@ -236,7 +210,7 @@ if __name__ == "__main__":
         result_df = pd.DataFrame(selected_stocks)
         
         # 保存为Excel文件
-        output_path = "/Users/danawang/coding/QuantitativeResearch/evaluate.xlsx"
+        output_path = "C:/Users/ZJH/Documents/浙江广电-前端开发项目/QuantitativeResearch/evaluate.xlsx"
         result_df.to_excel(output_path, index=False)
         print(f"已将筛选结果保存到: {output_path}")
         
