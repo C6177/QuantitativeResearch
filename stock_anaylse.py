@@ -117,7 +117,7 @@ def filter_by_valuation(stock_list):
     
     # 保存为Excel文件
     if not result_df.empty:
-        output_path = "C:/Users/ZJH/Documents/浙江广电-前端开发项目/QuantitativeResearch/fliter-1.xlsx"
+        output_path = "/Users/danawang/coding/QuantitativeResearch/fliter-1.xlsx"
         result_df[['code', 'name']].to_excel(output_path, index=False)
         print(f"已将筛选结果保存到: {output_path}")
     
@@ -129,7 +129,7 @@ def filter_by_fundamentals():
     final_stocks = []
     
     # 从fliter-1.xlsx读取筛选后的股票
-    input_file = "C:/Users/ZJH/Documents/浙江广电-前端开发项目/QuantitativeResearch/fliter-1.xlsx"
+    input_file = "/Users/danawang/coding/QuantitativeResearch/fliter-1.xlsx"
     try:
         filtered_stocks = pd.read_excel(input_file)
         print(f"已从 {input_file} 读取 {len(filtered_stocks)} 只股票")
@@ -240,7 +240,7 @@ def filter_by_fundamentals():
     
     # 保存为Excel文件
     if not result_df.empty:
-        output_file = "C:/Users/ZJH/Documents/浙江广电-前端开发项目/QuantitativeResearch/fliter-2.xlsx"
+        output_file = "/Users/danawang/coding/QuantitativeResearch/fliter-2.xlsx"
         result_df.to_excel(output_file, index=False)
         print(f"已将筛选结果保存到: {output_file}")
     
@@ -252,7 +252,7 @@ def filter_by_valuation_ranking():
     final_stocks = []
     
     # 从fliter-2.xlsx读取筛选后的股票
-    input_file = "C:/Users/ZJH/Documents/浙江广电-前端开发项目/QuantitativeResearch/fliter-2.xlsx"
+    input_file = "/Users/danawang/coding/QuantitativeResearch/fliter-2.xlsx"
     try:
         filtered_stocks = pd.read_excel(input_file)
         print(f"已从 {input_file} 读取 {len(filtered_stocks)} 只股票")
@@ -339,7 +339,7 @@ def filter_by_valuation_ranking():
     
     # 保存为Excel文件
     if not result_df.empty:
-        output_file = "C:/Users/ZJH/Documents/浙江广电-前端开发项目/QuantitativeResearch/fliter-3.xlsx"
+        output_file = "/Users/danawang/coding/QuantitativeResearch/fliter-3.xlsx"
         result_df[['code', 'name', 'ranking', 'industry']].to_excel(output_file, index=False)
         print(f"已将筛选结果保存到: {output_file}")
     
