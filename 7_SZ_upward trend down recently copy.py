@@ -7,12 +7,12 @@ import numpy as np
 # ==============================================
 def get_all_a_stocks():
     print("正在获取A股列表...")
-    # 使用 stock_info_sh_name_code 接口获取沪股列表
-    print("使用 stock_info_sh_name_code 接口...")
-    stock_list = ak.stock_info_sh_name_code()
+    # 使用 stock_info_sz_name_code 接口获取沪股列表
+    print("使用 stock_info_sz_name_code 接口...")
+    stock_list = ak.stock_info_sz_name_code(symbol="A股列表")
     # 提取证券代码和证券简称
-    stock_list = stock_list[['证券代码', '证券简称']].rename(columns={'证券代码': 'code', '证券简称': 'name'})
-    print(f"获取到 {len(stock_list)} 只沪股股票")
+    stock_list = stock_list[['A股代码', 'A股简称']].rename(columns={'A股代码': 'code', 'A股简称': 'name'})
+    print(f"获取到 {len(stock_list)} 只深股股票")
     return stock_list
 
 # ==============================================
@@ -61,8 +61,10 @@ def calculate_indicators(df):
 
     # --- 移动平均线 ---
     df['MA5'] = df['close'].rolling(window=5).mean()
+    df['MA10'] = df['close'].rolling(window=10).mean()
     df['MA20'] = df['close'].rolling(window=20).mean()
     df['MA30'] = df['close'].rolling(window=30).mean()
+    df['MA60'] = df['close'].rolling(window=60).mean()
 
     # --- MACD (指数平滑移动平均线) ---
     exp12 = df['close'].ewm(span=12, adjust=False).mean()
@@ -73,8 +75,8 @@ def calculate_indicators(df):
 
     # --- RSI (相对强弱指标) ---
     delta = df['close'].diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    gain = (delta.where(delta > 0, 0)).rolling(window=24).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=24).mean()
     rs = gain / loss
     df['RSI'] = 100 - (100 / (1 + rs))
 
@@ -107,6 +109,16 @@ def trend_scoring_system(df):
     conditions.append(condition1)
     reasons.append("MA5 > MA20" if condition1 else "MA5 <= MA20")
 
+    # 8. MA5 < MA10 (短期均线在中期之上)
+    condition8 = latest['MA5'] < latest['MA10']
+    conditions.append(condition8)
+    reasons.append("MA5 < MA10" if condition8 else "MA5 >= MA10")
+
+    # 9. MA5 > MA60 (短期均线在中期之上)
+    condition9 = latest['MA5'] > latest['MA60']
+    conditions.append(condition9)
+    reasons.append("MA5 > MA60" if condition9 else "MA5 <= MA60")
+
     # 2. MA20 > MA30 (中期均线在长期之上，多头排列)
     condition2 = latest['MA20'] > latest['MA30']
     conditions.append(condition2)
@@ -128,14 +140,14 @@ def trend_scoring_system(df):
     reasons.append("DIF > 0" if condition5 else "DIF <= 0")
 
     # 6. RSI > 50 (处于强势区域)
-    condition6 = latest['RSI'] > 50
+    condition6 = latest['RSI'] > 45
     conditions.append(condition6)
-    reasons.append("RSI > 50" if condition6 else "RSI <= 50")
+    reasons.append("RSI > 45" if condition6 else "RSI <= 45")
 
     # 7. 价涨量增：今日成交量 > 20日均量
     condition7 = (latest['volume'] > latest['VOL_MA20']) 
     conditions.append(condition7)
-    reasons.append("成交量增")
+    reasons.append("成交量增" if condition7 else "成交量未增")
 
     # # 8. 今日收盘价 < 昨日收盘价
     # condition8 = (latest['close'] < prev['close'])
@@ -215,7 +227,7 @@ if __name__ == "__main__":
         result_df = pd.DataFrame(selected_stocks)
         
         # 保存为Excel文件
-        output_path = "C:/Users/ZJH/Documents/浙江广电-前端开发项目/QuantitativeResearch/evaluate.xlsx"
+        output_path = "C:/Users/ZJH/Documents/浙江广电-前端开发项目/QuantitativeResearch/SZ_upward_trend_down_recently.xlsx"
         result_df.to_excel(output_path, index=False)
         print(f"已将筛选结果保存到: {output_path}")
         

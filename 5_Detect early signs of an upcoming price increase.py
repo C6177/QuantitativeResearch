@@ -8,8 +8,9 @@ import os
 # 添加当前目录到 Python 路径
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# 导入 stock_anaylse 模块
-import stock_anaylse
+# 导入 1_try 模块（使用importlib处理以数字开头的模块名）
+import importlib
+stock_anaylse = importlib.import_module('1_try')
 
 class EarlyTrendDetector:
     """
@@ -210,66 +211,107 @@ class EarlyTrendDetector:
             return False, {}
     
     # ==================== 4. 盘口条件 ====================
-    def check_tick_condition(self, volume_multiplier=2, min_aggressive_orders=10):
+    def check_tick_condition(self, volume_multiplier=2, min_aggressive_orders=10, max_retries=2, timeout=10):
         """
         条件4：盘中连续出现攻击性买单
         volume_multiplier: 攻击性买单定义为大于平均手数的倍数
         min_aggressive_orders: 最少攻击性买单数量
+        max_retries: 最大重试次数
+        timeout: 请求超时时间（秒）
         """
-        try:
-            # 获取日内分时数据
-            tick_df = ak.stock_intraday_em(symbol=self.stock_code)
-            
-            if tick_df.empty:
-                return False, {}
-            
-            # 筛选买盘
-            buy_orders = tick_df[tick_df['买卖盘性质'] == '买盘'].copy()
-            
-            if len(buy_orders) == 0:
-                return False, {}
-            
-            # 将手数转换为数值
-            buy_orders['手数'] = pd.to_numeric(buy_orders['手数'], errors='coerce')
-            
-            # 计算平均买盘手数
-            avg_volume = buy_orders['手数'].mean()
-            
-            # 定义攻击性买单：手数大于平均值的倍数
-            buy_orders['is_aggressive'] = buy_orders['手数'] > avg_volume * volume_multiplier
-            
-            # 统计攻击性买单
-            aggressive_orders = buy_orders[buy_orders['is_aggressive']]
-            
-            # 检测是否连续出现（例如，在30分钟内出现多次）
-            if len(aggressive_orders) >= min_aggressive_orders:
-                # 检查时间分布（可选）
-                times = aggressive_orders['时间'].tolist()
-                is_continuous = True  # 简化处理，可进一步优化
-            else:
-                is_continuous = False
-            
-            print(f"⏱️ 盘口条件诊断:")
-            print(f"   - 总买盘笔数: {len(buy_orders)}")
-            print(f"   - 攻击性买单笔数: {len(aggressive_orders)} (阈值: {min_aggressive_orders})")
-            if len(aggressive_orders) > 0:
-                print(f"   - 平均买盘手数: {avg_volume:.0f}手")
-                print(f"   - 最大攻击性买单: {aggressive_orders['手数'].max()}手")
-            
-            condition_met = len(aggressive_orders) >= min_aggressive_orders
-            return condition_met, {
-                'aggressive_count': len(aggressive_orders),
-                'avg_volume': avg_volume,
-                'aggressive_orders': aggressive_orders.head(5) if not aggressive_orders.empty else None
-            }
-        except Exception as e:
-            print(f"盘口条件分析出错: {e}")
+        # 检查是否在交易时间内
+        now = datetime.now()
+        today = now.strftime('%Y-%m-%d')
+        # 交易时间：9:30-11:30, 13:00-15:00
+        is_trading_time = (
+            (now.hour == 9 and now.minute >= 30) or 
+            (10 <= now.hour < 11) or 
+            (now.hour == 11 and now.minute <= 30) or
+            (now.hour == 13) or 
+            (now.hour == 14 and now.minute <= 59)
+        )
+        
+        if not is_trading_time:
+            print(f"⏱️ 盘口条件诊断: 非交易时间，跳过盘口数据获取")
             return False, {}
+        
+        # 重试机制
+        for attempt in range(max_retries + 1):
+            try:
+                # 获取日内分时数据
+                print(f"  尝试获取盘口数据 (尝试 {attempt+1}/{max_retries+1})...")
+                # 使用timeout参数设置请求超时
+                import requests
+                session = requests.Session()
+                session.timeout = timeout
+                
+                # 调用ak.stock_intraday_em，捕获可能的超时异常
+                tick_df = ak.stock_intraday_em(symbol=self.stock_code)
+                
+                if tick_df.empty:
+                    print("  盘口数据为空")
+                    return False, {}
+                
+                # 筛选买盘
+                buy_orders = tick_df[tick_df['买卖盘性质'] == '买盘'].copy()
+                
+                if len(buy_orders) == 0:
+                    print("  无买盘数据")
+                    return False, {}
+                
+                # 将手数转换为数值
+                buy_orders['手数'] = pd.to_numeric(buy_orders['手数'], errors='coerce')
+                
+                # 计算平均买盘手数
+                avg_volume = buy_orders['手数'].mean()
+                
+                # 定义攻击性买单：手数大于平均值的倍数
+                buy_orders['is_aggressive'] = buy_orders['手数'] > avg_volume * volume_multiplier
+                
+                # 统计攻击性买单
+                aggressive_orders = buy_orders[buy_orders['is_aggressive']]
+                
+                # 检测是否连续出现（例如，在30分钟内出现多次）
+                if len(aggressive_orders) >= min_aggressive_orders:
+                    # 检查时间分布（可选）
+                    times = aggressive_orders['时间'].tolist()
+                    is_continuous = True  # 简化处理，可进一步优化
+                else:
+                    is_continuous = False
+                
+                print(f"⏱️ 盘口条件诊断:")
+                print(f"   - 总买盘笔数: {len(buy_orders)}")
+                print(f"   - 攻击性买单笔数: {len(aggressive_orders)} (阈值: {min_aggressive_orders})")
+                if len(aggressive_orders) > 0:
+                    print(f"   - 平均买盘手数: {avg_volume:.0f}手")
+                    print(f"   - 最大攻击性买单: {aggressive_orders['手数'].max()}手")
+                
+                condition_met = len(aggressive_orders) >= min_aggressive_orders
+                return condition_met, {
+                    'aggressive_count': len(aggressive_orders),
+                    'avg_volume': avg_volume,
+                    'aggressive_orders': aggressive_orders.head(5) if not aggressive_orders.empty else None
+                }
+            except requests.exceptions.Timeout:
+                print(f"  获取盘口数据超时 (尝试 {attempt+1}/{max_retries+1})")
+                if attempt < max_retries:
+                    print("  正在重试...")
+                    continue
+                else:
+                    print("  已达到最大重试次数，跳过盘口数据获取")
+                    return False, {}
+            except Exception as e:
+                print(f"  盘口条件分析出错: {e}")
+                if attempt < max_retries:
+                    print("  正在重试...")
+                    continue
+                else:
+                    return False, {}
     
     # # ==================== 综合评分系统 ====================
     def save_top3_conditions_stocks(self, stock_name):
         """
-        检查前3个条件，如果都满足则保存到Excel文件
+        检查前3个条件，如果都满足则保存到Excel文件，同时检查第4个条件
         """
         print(f"\n{'='*60}")
         print(f"【早期上涨趋势发现器】股票代码: {self.stock_code}, 名称: {stock_name}")
@@ -279,6 +321,9 @@ class EarlyTrendDetector:
         fund_met, fund_info = self.check_fund_condition()
         pattern_met, pattern_info = self.check_pattern_condition()
         indicator_met, indicator_info = self.check_indicator_condition()
+        
+        # 检查第4个条件
+        tick_met, tick_info = self.check_tick_condition()
         
         # 输出每个条件的结果
         conditions_met = []
@@ -304,6 +349,11 @@ class EarlyTrendDetector:
             print("❌ 指标条件: 不满足")
             conditions_met.append(False)
         
+        if tick_met:
+            print("✅ 盘口条件: 满足")
+        else:
+            print("❌ 盘口条件: 不满足")
+        
         # 判断前3个条件是否都满足
         if all(conditions_met):
             print("🎉 前3个条件全部满足！正在保存到Excel...")
@@ -315,7 +365,8 @@ class EarlyTrendDetector:
                 '检测时间': [datetime.now().strftime('%Y-%m-%d %H:%M:%S')],
                 '资金条件': ['满足' if fund_met else '不满足'],
                 '形态条件': ['满足' if pattern_met else '不满足'],
-                '指标条件': ['满足' if indicator_met else '不满足']
+                '指标条件': ['满足' if indicator_met else '不满足'],
+                '盘口条件': ['满足' if tick_met else '不满足']
             }
             
             df_result = pd.DataFrame(result_data)
@@ -372,4 +423,3 @@ if __name__ == "__main__":
     print(f"满足前3个条件的股票数量: {satisfied_count}")
     print(f"结果已保存到: C:/Users/ZJH/Documents/浙江广电-前端开发项目/QuantitativeResearch/findup.xlsx")
     print("="*60)
-    
