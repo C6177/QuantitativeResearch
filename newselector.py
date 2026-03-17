@@ -1,6 +1,7 @@
 import akshare as ak
 import pandas as pd
 import numpy as np
+import time
 from datetime import datetime, timedelta
 
 # ==============================================
@@ -23,6 +24,8 @@ def get_stock_data(symbol, start_date, end_date):
     使用 stock_zh_a_hist 获取股票历史数据
     """
     try:
+        # 添加延迟，避免频繁请求被封
+        time.sleep(0.5)
         # 参数说明:
         # symbol: 股票代码, 例如 "000001"
         # period: "daily" 日频
@@ -48,6 +51,8 @@ def get_stock_data(symbol, start_date, end_date):
         return df
     except Exception as e:
         print(f"获取数据时出错: {e}")
+        # 出错后再延迟一下
+        time.sleep(1)
         return None
 
 # ==============================================
@@ -199,25 +204,36 @@ if __name__ == "__main__":
     growth_selected = []
     scale_selected = []
 
-    # 遍历所有股票
-    for index, row in stock_list.iterrows():
-        code = row['code']
-        name = row['name']
-        print(f"\n分析第 {index+1}/{total_stocks} 只股票: {code} {name}")
+    # 分批处理，每次处理50只股票
+    batch_size = 50
+    for i in range(0, total_stocks, batch_size):
+        batch_end = min(i + batch_size, total_stocks)
+        print(f"\n处理第 {i+1}-{batch_end} 只股票...")
+        
+        # 处理当前批次的股票
+        for index in range(i, batch_end):
+            row = stock_list.iloc[index]
+            code = row['code']
+            name = row['name']
+            print(f"\n分析第 {index+1}/{total_stocks} 只股票: {code} {name}")
 
-        # 2. 获取股票数据
-        stock_data = get_stock_data(code, start_date, end_date)
+            # 2. 获取股票数据
+            stock_data = get_stock_data(code, start_date, end_date)
 
-        if stock_data is not None:
-            print(f"成功获取 {len(stock_data)} 条日线数据。")
+            if stock_data is not None:
+                print(f"成功获取 {len(stock_data)} 条日线数据。")
 
-            # 3. 计算指标
-            stock_data_with_indicators = calculate_indicators(stock_data)
+                # 3. 计算指标
+                stock_data_with_indicators = calculate_indicators(stock_data)
 
-            # 4. 技术指标筛选
-            if technical_analysis(stock_data_with_indicators):
-                technical_selected.append({"code": code, "name": name})
-                print(f"✓ 股票 {code} {name} 满足技术指标条件，已加入筛选结果")
+                # 4. 技术指标筛选
+                if technical_analysis(stock_data_with_indicators):
+                    technical_selected.append({"code": code, "name": name})
+                    print(f"✓ 股票 {code} {name} 满足技术指标条件，已加入筛选结果")
+        
+        # 批次处理完成后，添加较长的延迟
+        print(f"第 {i+1}-{batch_end} 只股票处理完成，休息3秒...")
+        time.sleep(3)
 
     # 5. 输出技术指标筛选结果
     if technical_selected:
